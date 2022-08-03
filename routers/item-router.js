@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import client from '../om/client.js'
 import { itemRepository } from '../om/item.js' 
-import { sortByDistance,   } from './helper/index.js'
+import { Aggregation } from './aggregation/index.js'
+import { fromArrayOfStringToJson, sortByDistance,   } from './helper/index.js'
 import { raw } from './output.js'
 
 export const router = Router()
@@ -51,7 +52,8 @@ router.get('/search', async (req, res) => {
         .or('metaDescription').matches(text) 
         .or('menuCategoriesName').matches(text)
         .or('mealTagName').contains(text)
-        .or('tagName').contains(text).return.page(offset, count)
+        .or('tagName').contains(text)
+        .return.page(offset, count)
         res.send(result)
     } catch (error) {
         console.log(error)
@@ -104,16 +106,31 @@ router.get('/search', async (req, res) => {
     try {
         let text = req.query.text+"*"
         let query = ['FT.SEARCH','item']
-        // query.push(`(@itemTagName:${text}|@metaDescription:${text}|@metaName:${text}|@menuCategoriesName:${text})`)
-
-        // const q = [...query, `${text} @location:[90.4121358 23.7993865 2 km]`, "LIMIT", 1, 10,]
-        
-        const q = ['FT.AGGREGATE', 'item', `${text} @location:[90.4121358 23.7993865 2 km]`, "LOAD", "*", "APPLY", "geodistance(@location, 90.4121358, 23.7993865)", "AS", "dist", "SORTBY", 2, "@dist", "ASC"]
+         
+        const q = ['FT.AGGREGATE', 'item', `${text} @location:[90.4121358 23.7993865 2 km]`, "LOAD", "*", "APPLY", "geodistance(@location, 90.4121358, 23.7993865)", "AS", "dist", "SORTBY", 2, "@dist", "ASC", "LIMIT", 0, 5]
         
         console.log(q)
        const data =  await client.execute(q)
+       //convert data to json
        console.log(data.length);
-       res.send(data)
+       res.send(fromArrayOfStringToJson(data))
+    } catch (error) {
+        console.log(error)
+    }
+  })
+
+  
+
+  router.get('/aggregate', async (req, res)=>{
+    try {
+        let { index, key, loadFields, offset, count } = req.query 
+        const aggregate = new Aggregation()
+        const query = aggregate.index(index).find(key).inRadius(90.4121358, 23.7993865, 5000, "m").load(loadFields).applyGeoDistance(90.4121358, 23.7993865, "dist").sortBy("dist", "ASC").limit(offset, count).build() 
+        // const query = aggregate.index(index).find(key+"*").load(loadFields).applyGeoDistance(90.4121358, 23.7993865, "dist").sortBy("dist", "ASC").build() 
+        console.log(query)
+       const data =  await client.execute(query) 
+       console.log(data.length);
+       res.send(fromArrayOfStringToJson(data))
     } catch (error) {
         console.log(error)
     }
