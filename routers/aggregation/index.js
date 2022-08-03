@@ -48,8 +48,7 @@ export class Aggregation{
     limit(offset=0, count=100){
         this.query.push("LIMIT", `${offset}`, `${count}`)
         return this;
-    } 
-    
+    }  
     build(){
         return this.query;
     }
